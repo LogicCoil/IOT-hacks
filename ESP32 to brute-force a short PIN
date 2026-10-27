@@ -1,0 +1,40 @@
+#include "USB.h"
+#include "USBHIDKeyboard.h"
+
+USBHIDKeyboard Keyboard;
+
+void setup() {
+  // Start the USB keyboard emulation
+  Keyboard.begin();
+  USB.begin();
+
+  // Wait 3 seconds after plugging into the phone to let it register
+  delay(3000);
+
+  // Optional: Send a command to wake up the screen (e.g., Enter or space)
+  Keyboard.press(KEY_RETURN);
+  delay(100);
+  Keyboard.releaseAll();
+  delay(1000); // Wait for screen to wake up
+
+  // Example: Type wrong PINs first (just like in the video)
+  typePin("1234");
+  delay(1500); // Wait for error timeout
+  
+  typePin("9999");
+  delay(1500);
+
+  // Finally, type your actual correct PIN
+  typePin("5678"); // Replace with your actual PIN
+}
+
+void loop() {
+  // Nothing to do here, the sequence runs once on boot
+}
+
+void typePin(String pin) {
+  Keyboard.print(pin);
+  delay(100);
+  Keyboard.press(KEY_RETURN); // Press enter/submit
+  Keyboard.releaseAll();
+}
