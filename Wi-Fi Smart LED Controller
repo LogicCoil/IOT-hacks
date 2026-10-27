@@ -1,0 +1,54 @@
+#include <ESP8266WiFi.h>
+
+// --- Wi-Fi Credentials ---
+const char* ssid = "YOUR_SSID";
+const char* password = "YOUR_PASSWORD";
+
+WiFiServer server(80);
+const int ledPin = D1; // Pin connected to the LED
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  
+  server.begin();
+  Serial.println("\nWi-Fi Connected!");
+  Serial.print("Open this IP in your browser: http://");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  WiFiClient client = server.available();
+  if (!client) return;
+
+  // Read request
+  String request = client.readStringUntil('\r');
+  client.flush();
+
+  // Control LED
+  if (request.indexOf("/LED=ON") != -1) {
+    digitalWrite(ledPin, HIGH);
+  } else if (request.indexOf("/LED=OFF") != -1) {
+    digitalWrite(ledPin, LOW);
+  }
+
+  // Web Page HTML Response
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/html");
+  client.println("");
+  client.println("<!DOCTYPE HTML><html><body style='text-align:center;'>");
+  client.println("<h1>ESP8266 Smart LED</h1>");
+  client.println("<p><a href=\"/LED=ON\"><button style='font-size:20px;padding:10px 20px;'>TURN ON</button></a></p>");
+  client.println("<p><a href=\"/LED=OFF\"><button style='font-size:20px;padding:10px 20px;'>TURN OFF</button></a></p>");
+  client.println("</body></html>");
+  
+  delay(1);
+}
