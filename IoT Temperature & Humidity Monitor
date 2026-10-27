@@ -1,0 +1,124 @@
+#include <ESP8266WiFi.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+#include <DHT.h>
+
+// --- Wi-Fi Credentials ---
+#define WLAN_SSID       "YOUR_SSID"     // Replace with your Wi-Fi name
+#define WLAN_PASS       "YOUR_PASSWORD" // Replace with your Wi-Fi password
+
+// --- Adafruit IO (AIO) Setup ---
+#define AIO_SERVER      "io.adafruit.com"
+#define AIO_SERVERPORT  1883                   // Use 8883 for SSL, 1883 for non-SSL
+#define AIO_USERNAME    "YOUR_AIO_USERNAME"    // Replace with your Adafruit IO Username
+#define AIO_KEY         "YOUR_AIO_KEY"         // Replace with your Adafruit IO Active Key
+
+// --- Sensor Configuration ---
+#define DHTPIN 2          // Digital pin connected to the DHT sensor (D4 on NodeMCU)
+#define DHTTYPE DHT11     // Change to DHT22 if you are using a DHT22 sensor
+DHT dht(DHTPIN, DHTTYPE);
+
+// --- MQTT Setup ---
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+
+// Setup feeds for temperature and humidity
+Adafruit_MQTT_Publish temperatureFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/temperature");
+Adafruit_MQTT_Publish humidityFeed    = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/humidity");
+
+void MQTT_connect();
+
+void setup() {
+  Serial.begin(115200);
+  delay(10);
+
+  // Initialize the DHT sensor
+  dht.begin();
+
+  Serial.println(F("IoT Temperature & Humidity Monitor"));
+
+  // Connect to Wi-Fi
+  Serial.print(F("Connecting to "));
+  Serial.println(WLAN_SSID);
+
+  WiFi.begin(WLAN_SSID, WLAN_PASS);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(F("."));
+  }
+  Serial.println();
+  Serial.println(F("Wi-Fi connected!"));
+  Serial.println(F("IP address: "));
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  // Ensure the connection to the MQTT broker is alive
+  MQTT_connect();
+
+  // Wait a few seconds between measurements
+  delay(5000);
+
+  // Read humidity
+  float h = dht.readHumidity();
+  // Read temperature as Celsius
+  float t = dht.readTemperature();
+
+  // Check if readings failed and exit early to try again
+  if (isnan(h) || isnan(t)) {
+    Serial.println(F("Failed to read from DHT sensor!"));
+    return;
+  }
+
+  // Print readings to Serial Monitor
+  Serial.print(F("Humidity: "));
+  Serial.print(h);
+  Serial.print(F("%  Temperature: "));
+  Serial.print(t);
+  Serial.println(F("°C"));
+
+  // Publish data to Adafruit IO
+  Serial.print(F("Sending temperature val: "));
+  Serial.print(t);
+  Serial.print(F("..."));
+  if (!temperatureFeed.publish(t)) {
+    Serial.println(F("Failed"));
+  } else {
+    Serial.println(F("OK!"));
+  }
+
+  Serial.print(F("Sending humidity val: "));
+  Serial.print(h);
+  Serial.print(F("..."));
+  if (!humidityFeed.publish(h)) {
+    Serial.println(F("Failed"));
+  } else {
+    Serial.println(F("OK!"));
+  }
+}
+
+// Function to connect and reconnect to MQTT broker
+void MQTT_connect() {
+  int8_t ret;
+
+  // Stop if already connected
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print(F("Connecting to MQTT... "));
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.println(mqtt.connectErrorString(ret));
+       Serial.println(F("Retrying MQTT connection in 5 seconds..."));
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds
+       retries--;
+       if (retries == 0) {
+         // Basically die and wait for WDT to reset or try again later
+         while (1);
+       }
+  }
+  Serial.println(F("MQTT Connected!"));
+}
